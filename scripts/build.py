@@ -28,7 +28,7 @@ def build():
     revision = hashlib.sha256(json.dumps(cards,sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:16]
     manifest = {'version':revision,'cards':cards}
     (out/'catalog.json').write_text(json.dumps(manifest,ensure_ascii=False),encoding='utf-8')
-    for name in ('index.html','style.css','app.js','core.js','storage.js','sync.js','sw.js','admin.js'):
+    for name in ('index.html','style.css','app.js','core.js','storage.js','sync.js','sw.js','admin.js','cloud-config.js','analytics.js'):
         shutil.copyfile(ROOT/name,out/name)
     shutil.copytree(ROOT/'admin',out/'admin',dirs_exist_ok=True)
     shutil.copytree(ROOT/'assets',out/'assets',dirs_exist_ok=True)

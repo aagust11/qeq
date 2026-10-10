@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {leaderboard,photoExtremes} from '../analytics.js';
+test('returns every tied most-correct and most-wrong photo; ignores unanswered photos',()=>{const photos=[{id:'1',responses:5,correct:3,wrong:2},{id:'2',responses:4,correct:3,wrong:1},{id:'3',responses:2,correct:0,wrong:2},{id:'4',responses:0,correct:0,wrong:0}];const r=photoExtremes(photos);assert.deepEqual(r.mostCorrect.map(p=>p.id),['1','2']);assert.deepEqual(r.mostWrong.map(p=>p.id),['1','3']);assert.deepEqual(photoExtremes([photos[3]]).mostCorrect,[]);});
+test('only finished attempts enter leaderboard, ordered by score',()=>{const make=(id,answers)=>({id,startedAt:id,cards:[{id:'p',person:'Èric'}],answers});assert.deepEqual(leaderboard([make('a',[]),make('b',[{id:'p',choice:'Aleix'}]),make('c',[{id:'p',choice:'Èric'}])]).map(a=>a.id),['c','b']);});

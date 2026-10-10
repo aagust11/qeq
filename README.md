@@ -1,45 +1,51 @@
 # Èric o Aleix · Qui és qui?
 
-Interfície en català, nom i cognoms, botons i lliscament (Èric: esquerra/groc; Aleix: dreta/blau), animació amb segell, blocs de set fotos i revisió final. No es revela cap resposta individual fins que l’administració ho activa. El recompte inclou l’últim bloc encara que tingui menys de set fotos. Les decisions són definitives.
+Joc públic: https://aagust11.github.io/qeq/
+Administració privada: https://aagust11.github.io/qeq/admin/
 
-## Afegir les fotos
+## Dades compartides a Supabase
 
-Puja les fotos individuals a **`fotos/Èric/`** i **`fotos/Aleix/`** a `main`. JPG, JPEG, PNG o WEBP. Cada foto és una pregunta; hi ha d’aparèixer només el germà corresponent. Per a fotos de tots dos, fes servir `fotos/Conjuntes/`: si el nom comença per `ea`, l’ordre d’esquerra a dreta és Èric i Aleix; si comença per `ae`, és Aleix i Èric. No cal retallar-les. S’accepten majúscules i minúscules. Les fotos conjuntes sense aquests prefixos s’ignoren amb un avís al registre de publicació. Cada foto conjunta és una pregunta i val un punt si s’encerta tot l’ordre. GitHub Actions genera automàticament el catàleg i publica el joc. Les sis fotos originals es fan servir només per a la portada: no tenen identitats suposades. Fins que pugis fotos a les carpetes, no es pot començar el repte.
+L’aplicació HTTPS es connecta al projecte **Bessons** mitjançant l’Edge Function `qeq-api`. Les partides, decisions, puntuacions, estadístiques i configuració es desen a Postgres. Ja no cal tenir un ordinador servidor encès ni compartir wifi: cada mòbil fa servir la seva connexió a Internet.
 
-Els fitxers publicats tenen noms neutres. Això amaga la resposta en el nom de la foto, però **aquest joc de festa no és un examen antitrampes**: el catàleg del navegador conté les identitats per poder calcular els resultats sense connexió. Un usuari tècnic que inspeccioni el codi o el repositori públic pot descobrir-les. La interfície les oculta fins a l’ordre de l’administració.
+L’administració requereix contrasenya. Es desa amb PBKDF2-SHA256, salt aleatòria i 600.000 iteracions; no es publica a GitHub. Les sessions caduquen al cap de 12 hores. Hi ha limitació d’intents d’entrada. La contrasenya es pot canviar dins d’administració; això revoca les altres sessions. Les taules i funcions de dades només són accessibles per l’Edge Function, amb RLS habilitada i permisos públics revocats. L’absència de polítiques RLS per a anon/authenticated és deliberada: aquests rols no han d’accedir directament a cap fila. La clau service_role només existeix al servidor.
 
-## Opció A: festa en una mateixa wifi (recomanada per funcionar sense Internet)
+## Una partida per dispositiu i recuperació
 
-1. Descarrega el repositori des de GitHub (Code → Download ZIP), descomprimeix-lo i instal·la Python 3.10 o superior si no el tens.
-2. A Windows fes doble clic a **`Iniciar-festa.bat`**. En altres sistemes: `python3 serve.py`.
-3. La consola mostra l’adreça local per als mòbils, la URL `/admin/` i una contrasenya aleatòria d’administració. Pots fixar-la amb la variable d’entorn `QEQ_ADMIN_PASSWORD`.
-4. Tots els mòbils han d’obrir **l’adreça local de la consola**, no GitHub Pages, i estar a la mateixa wifi. El tallafoc ha de permetre Python en aquesta xarxa de confiança. Una wifi de convidats que aïlli els dispositius no servirà.
-5. Obre `/admin/`, inicia sessió i deixa el servidor encès. Pots ocultar noms per projectar i activar les respostes per a tots els participants. S’actualitza cada 5 segons; els mòbils comproven els canvis cada 10 segons.
+El navegador crea identificadors aleatoris ocults per al dispositiu i la partida, amb un secret. La base de dades imposa una única partida per identificador de dispositiu. La portada reprèn aquesta partida o mostra el resultat si ja s’ha acabat; no ofereix tornar a jugar. Les pestanyes comparteixen estat i, quan el navegador ho permet, s’utilitza Web Locks per evitar decisions simultànies.
 
-**No cal Internet**, però sí la wifi local i l’ordinador servidor encès. No cal Supabase. No exposis aquest servidor HTTP a Internet; està pensat per a una xarxa local de confiança. La contrasenya canvia quan reinicies, llevat que la fixis. La base de dades es manté.
+Cada resposta es desa localment abans d’avançar. En recuperar la connexió s’envien només les respostes pendents; els reenviaments són idempotents i el servidor no permet canviar decisions rebudes. Si el mòbil es tanca, es reprèn des del punt desat. També es pot recuperar la còpia del servidor amb les credencials ocultes del dispositiu. Les fotos es preparen en memòria cau abans de començar; el mode sense connexió exigeix haver descarregat les fotos i la pàgina. Si el navegador denega o elimina l’emmagatzematge, aquesta garantia queda limitada.
 
-Les puntuacions es recalculen al servidor a partir del catàleg, no es confia en els punts enviats pel client. Cada partida té un identificador i un secret aleatoris. El servidor bloqueja canvis en decisions ja rebudes. L’administració exigeix autenticació; no hi ha cap enllaç des de la portada. Amagar l’enllaç no és la protecció.
+**Límit real:** és una restricció per perfil de navegador, no una identificació física infal·lible. Es pot eludir esborrant les dades, amb mode privat o amb un altre navegador/dispositiu. No s’utilitza fingerprinting, IP com a identitat ni cap dada oculta del maquinari. Per impedir també aquests casos caldrien invitacions individuals o comptes.
 
-## Si es perd la connexió
+La còpia local continua funcionant durant un tall; l’administració només pot veure el progrés que ja ha arribat al servidor. El joc torna a comprovar la connexió periòdicament i en recuperar la xarxa. No cal reenviar fotos, el catàleg ni tota la partida a cada resposta. L’administració comprova revisions i no torna a descarregar les dades si no han canviat.
 
-Cada resposta es desa primer al navegador. Es reintenta l’enviament cada 10 segons, en recuperar la xarxa i en tornar a la pestanya. Repetir un enviament no duplica la partida. La base de dades `.local/partides.sqlite3` conserva totes les partides rebudes després de reiniciar el servidor. Conserva la carpeta `.local` com a còpia de seguretat i no la pugis a GitHub.
+## Administració
 
-A GitHub Pages (HTTPS), el servei de memòria cau permet reobrir el joc sense connexió després de la primera càrrega i prepara les fotos abans de començar, si hi ha espai. A la wifi local (HTTP), mantén **la pàgina oberta**: sense connexió no es pot garantir reobrir-la, perquè els navegadors no permeten service workers en HTTP de xarxa local. Les respostes desades es recuperen en tornar a connectar-se. Si el navegador denega l’emmagatzematge, el joc ho avisa i no accepta noves decisions sense desar-les.
+- Configuració compartida: ocultar noms i revelar solucions.
+- Rànquing de partides acabades per encerts, amb errors com a desempat. Els empats exactes comparteixen posició. Noms ocults per defecte; clic per descobrir-los individualment.
+- Progrés de totes les partides i detall de decisions.
+- Fotos amb més encerts i més errors, inclosos tots els empats. És una comparació per quantitat; el percentatge permet comparar exposicions diferents.
+- Resum per foto: respostes, encerts, errors i percentatge. Sense respostes, el percentatge és «—».
+- Les fotos conjuntes compten com una pregunta i un punt.
+- Exportació privada en JSON. Ocultar noms a la pantalla no anonimitza el fitxer exportat.
 
-## Opció B: GitHub Pages, sense servidor
+## Incorporar fotos
 
-https://aagust11.github.io/qeq/
+Puja a `main` JPG, JPEG, PNG o WEBP a:
 
-Permet jugar i desar el progrés al dispositiu. **No centralitza dades entre dispositius.** `/admin/` només mostra partides d’aquest mateix navegador i permet importar JSON descarregats pels jugadors. El control de revelar respostes en aquest mode només afecta el mateix navegador. No hi ha una contrasenya falsa en JavaScript: no existeixen dades remotes compartides en aquest mode.
+- `fotos/Èric/`: Èric sol.
+- `fotos/Aleix/`: Aleix sol.
+- `fotos/Conjuntes/`: noms que comencin per `ea` (Èric i Aleix) o `ae` (Aleix i Èric), sempre **d’esquerra a dreta**. Majúscules i minúscules acceptades.
 
-Per fer servir l’enllaç públic amb marcador compartit real cal desplegar un backend HTTPS o integrar Supabase. No s’ha creat cap compte, servei de pagament ni base de dades externa. No canviïs d’origen o d’adreça a mitja festa: l’emmagatzematge del navegador està associat a l’adreça que ha obert cada jugador.
+GitHub Actions genera el catàleg i publica el joc. Una foto conjunta sense prefix vàlid s’ignora amb un avís. La base de dades registra els catàlegs nous des de la publicació oficial, mai des de les identitats enviades pel jugador. Es conserven els catàlegs anteriors ja registrats per puntuar les partides en curs. Si elimines una foto del repositori, els resultats històrics es conserven, però la seva miniatura pot deixar d’estar disponible a GitHub Pages.
 
-## Administració i privadesa
+No és un examen antitrampes: per puntuar sense connexió, el catàleg del navegador conté la solució, i les carpetes del repositori són públiques. La interfície només revela cada solució quan l’administració ho activa. El servidor recalcula els punts a partir del seu catàleg i ignora puntuacions o identitats manipulades pel client.
 
-La revisió final mostra la decisió i, després d’activar les solucions, la identitat i els punts (+1 o 0). L’administració veu progrés, encerts, errors, última recepció i detall. Ocultar els noms només canvia la pantalla: no anonimitza l’exportació ni la base de dades. Els fitxers exportats contenen dades personals i s’han de conservar de manera privada.
+## Desenvolupament i servidor local opcional
 
-Les partides en curs mantenen el seu catàleg i ordre de fotos quan s’actualitza el catàleg. El servidor conserva les versions de catàlegs que ha carregat. No eliminis `dist/photos` durant una festa: pot contenir fotos de partides iniciades abans d’una actualització.
+`python3 scripts/build.py` genera `dist/`.
+`node --test tests/*.mjs` i `python3 -m unittest discover -s tests -p 'test_*.py'` executen les proves.
 
-## Desenvolupament
+`supabase/schema.sql` és la còpia reproduïble de l’esquema inicial complet; no s’ha d’executar de nou sobre una base ja inicialitzada. Les migracions aplicades consten a Supabase. `supabase/functions/qeq-api/index.ts` conté el servidor i `cloud-config.js` només l’adreça pública. Cap clau privilegiada ni contrasenya es desa al repositori.
 
-`python3 scripts/build.py` genera `dist/`. `python3 serve.py` genera el lloc i inicia el servidor. Proves: `node --test tests/core.test.mjs` i `python3 -m unittest discover -s tests -p 'test_*.py'`.
+El servidor Python anterior continua disponible amb `Iniciar-festa.bat` o `python3 serve.py`. En HTTP local fa servir SQLite, no Supabase. És un mode separat: els jugadors de GitHub Pages utilitzen Supabase. No canviïs d’adreça a mitja partida. Per a la festa amb dades compartides, fes servir l’enllaç HTTPS de GitHub Pages.

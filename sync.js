@@ -1,37 +1,57 @@
-import {read, write, attempts} from './storage.js';
+import {read, write, savedSession,deviceIdentity,saveAttempt} from './storage.js';
+import {CLOUD_API} from './cloud-config.js';
+export const usingCloud = location.protocol === 'https:';
+export const receiptKey = id => (usingCloud?'cloud-sent-':'sent-')+id;
 let running=false;
+function root(){return new URL('./',new URL(document.querySelector('meta[name="app-root"]')?.content||'./',location.href));}
+function endpoint(path){return usingCloud?new URL(path,CLOUD_API):new URL('api/'+path,root());}
 export async function getServer() {
   try {
-    const r=await fetch(new URL('api/info',root()),{cache:'no-store',signal:AbortSignal.timeout(4000)});
-    if(!r.ok) return null;
-    const data=await r.json();
-    if(data.service!=='qeq-local-v2')return null;
+    const r=await fetch(endpoint('info'),{cache:'no-store',signal:AbortSignal.timeout(8000)});
+    if(!r.ok)return null;const data=await r.json();
+    if(!['qeq-cloud-v1','qeq-local-v2'].includes(data.service))return null;
     write('server-known',true);return data;
-  } catch {return null;}
+  }catch{return null;}
 }
-function root(){return new URL('./',new URL(document.querySelector('meta[name="app-root"]')?.content||'./',location.href));}
-export async function api(path, options={}) {
-  const r=await fetch(new URL('api/'+path,root()),{...options,cache:'no-store',headers:{'Content-Type':'application/json',...(options.headers||{})},signal:AbortSignal.timeout(8000)});
-  const data=await r.json().catch(()=>({error:'Resposta del servidor no vàlida.'}));
-  if(!r.ok)throw new Error(data.error||'No s’ha pogut connectar.');
-  return data;
+export async function api(path,options={}) {
+ const headers={'Content-Type':'application/json',...(options.headers||{})};
+ if(usingCloud&&headers.Authorization){headers['X-Admin-Token']=headers.Authorization.replace(/^Bearer /,'');delete headers.Authorization;}
+ const r=await fetch(endpoint(path),{...options,cache:'no-store',headers,signal:AbortSignal.timeout(15000)});
+ const data=await r.json().catch(()=>({error:'Resposta del servidor no vàlida.'}));
+ if(!r.ok){const e=new Error(data.error||'No s’ha pogut connectar.');e.status=r.status;e.needsSnapshot=data.needsSnapshot;throw e;}return data;
 }
 export async function syncAll() {
-  if(running)return;running=true;
-  try {
-    const info=await getServer();
-    if(!info) {document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:false,known:read('server-known',false)}}));return;}
-    write('settings',info.settings);
-    for(const a of attempts()) {
-      if(!a || a.schema!==2)continue;
-      const sent=read('sent-'+a.id, -1);
-      if(sent===a.answers.length)continue;
-      try {
-        await api('attempts/'+a.id,{method:'PUT',headers:{'X-Attempt-Secret':a.secret},body:JSON.stringify(a)});
-        write('sent-'+a.id,a.answers.length);
-        write('sync-error-'+a.id,null);
-      } catch(e){write('sync-error-'+a.id,e.message);}
-    }
-    document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:true,settings:info.settings}}));
-  } finally {running=false;}
+ if(running)return;running=true;
+ try{
+  const info=await getServer();
+  if(!info){document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:false,known:usingCloud||read('server-known',false)}}));return;}
+  write('settings',info.settings);
+  for(const a of [savedSession()]){
+   if(!a||a.schema!==2||!a.secret)continue;
+   const device=deviceIdentity();a.deviceId=device.id;
+   const sent=read(receiptKey(a.id),-1);const ackKey=receiptKey(a.id)+'-ack';
+   if(sent===a.answers.length&&read(ackKey,0)===(a.acknowledged||0))continue;
+   const payload=usingCloud&&sent>=0?{id:a.id,deviceId:device.id,from:sent,answers:a.answers.slice(sent),acknowledged:a.acknowledged||0}:a;
+   try{const result=await api('attempts/'+a.id,{method:'PUT',headers:{'X-Attempt-Secret':a.secret},body:JSON.stringify(payload)});
+    if(result.recovered&&result.attempt){adoptRecovered(result.attempt,device);}
+    else{write(receiptKey(a.id),result.accepted??a.answers.length);write(ackKey,a.acknowledged||0);}
+    write('sync-error-'+a.id,null);
+   }catch(e){if(e.needsSnapshot)write(receiptKey(a.id),-1);write('sync-error-'+a.id,e.message);}
+  }
+  document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:true,settings:info.settings}}));
+ }finally{running=false;}
+}
+
+function adoptRecovered(remote,device){
+ const local=savedSession();
+ if(local?.id===remote.id&&local.answers.length>=remote.answers.length)return local;
+ const recovered={...remote,secret:device.secret,acknowledged:remote.acknowledged||0};
+ saveAttempt(recovered);write('device',{...device,attemptId:recovered.id});
+ document.dispatchEvent(new CustomEvent('qeq-recovered'));return recovered;
+}
+export async function recoverSession(){
+ const device=deviceIdentity();
+ if(!usingCloud)return savedSession();
+ try{const r=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id})});if(r.attempt)return adoptRecovered(r.attempt,device);}
+ catch{}return savedSession();
 }
