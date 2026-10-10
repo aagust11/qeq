@@ -1,0 +1,1 @@
+{"name":"eric-aleix-qui-es-qui","private":true,"type":"module","scripts":{"test":"node --test tests/core.test.mjs"}}

@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {tally,blocks,completedCount,shuffled,validAttempt} from '../core.js';
+const cards=Array.from({length:15},(_,i)=>({id:String(i),person:i%2?'Aleix':'Èric',src:`photos/${String(i).padStart(24,'0')}.jpg`}));
+const fixture=()=>({schema:2,id:'11111111-1111-4111-8111-111111111111',secret:'22222222-2222-4222-8222-222222222222',firstName:'Nom',lastName:'Cognoms',cards,answers:[]});
+test('no score is released for unfinished blocks; last partial block is counted',()=>{const a=fixture();for(let i=0;i<15;i++){a.answers.push({id:String(i),choice:'Èric'});assert.equal(completedCount(a),i===14?15:Math.floor((i+1)/7)*7);}assert.deepEqual(blocks(a),[{correct:4,wrong:3,count:7,number:1},{correct:3,wrong:4,count:7,number:2},{correct:1,wrong:0,count:1,number:3}]);assert.deepEqual(tally(a),{correct:8,wrong:7,count:15});});
+test('resumed JSON retains exact order and totals',()=>{const a=fixture();a.answers=cards.slice(0,8).map(c=>({id:c.id,choice:c.person}));assert(validAttempt(JSON.parse(JSON.stringify(a))));assert.equal(completedCount(a),7);assert.equal(tally(a,0,completedCount(a)).correct,7);});
+test('rejects duplicate cards, bad identity, injected URL, reordered responses',()=>{const a=fixture();assert(validAttempt(a));const b=structuredClone(a);b.cards[1].id='0';assert(!validAttempt(b));const c=structuredClone(a);c.cards[0].src='https://example.com/track';assert(!validAttempt(c));a.answers=[{id:'1',choice:'Èric'}];assert(!validAttempt(a));});
+test('shuffle keeps every photo exactly once and leaves original unchanged',()=>{const before=JSON.stringify(cards);const shuffledCards=shuffled(cards,()=>0.3);assert.equal(JSON.stringify(cards),before);assert.equal(new Set(shuffledCards.map(c=>c.id)).size,15);assert.notDeepEqual(shuffledCards,cards);});
