@@ -1,4 +1,4 @@
-const SHELL='qeq-shell-v8';
+const SHELL='qeq-shell-v9';
 const FILES=['./','index.html','style.css','app.js','core.js','storage.js','sync.js','catalog.json','admin/','admin.js','cloud-config.js','analytics.js','preload.js','presentation.js','presentation.css','admin/resultats.html'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(SHELL).then(cache=>cache.addAll(FILES))));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{for(const key of await caches.keys())if(key.startsWith('qeq-shell-')&&key!==SHELL)await caches.delete(key);await self.clients.claim();})()));

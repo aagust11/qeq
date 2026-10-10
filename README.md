@@ -52,7 +52,7 @@ El servidor Python anterior continua disponible amb `Iniciar-festa.bat` o `pytho
 
 ## Presentació dels resultats
 
-A administració, «Presentar els resultats» obre una pestanya privada amb l’estil de la caràtula, guanyadors i fotos amb més encerts/errors (tots els empats). S’actualitza cada 5 segons, té pantalla completa i permet mostrar/ocultar els noms sense modificar la configuració general. No porta cap credencial a la URL. Requereix una sessió d’administració vàlida.
+A administració, «Presentar els resultats» obre una pestanya privada amb l’estil de la caràtula, guanyadors i fotos amb més encerts/errors (tots els empats). S’actualitza cada 5 segons, té pantalla completa i mostra sempre el nom i els cognoms originals dels guanyadors, independentment de l’ocultació de noms a administració. No porta cap credencial a la URL. Requereix una sessió d’administració vàlida.
 
 Guanya qui té més encerts entre les partides acabades. En cas d’empat, guanya qui té menys mil·lisegons de temps actiu; si també empaten, comparteixen victòria. El temps compta amb el joc visible i no pausat per l’organització (incloses les pauses de resultats de bloc), s’atura en sortir a la portada, ocultar/tancar la pestanya o acabar, i exclou la preparació inicial de fotos. Es desa localment cada segon i amb cada resposta; un tancament brusc pot perdre fins a aproximadament un segon de temps, però no les decisions desades. Es recupera amb la partida i s’envia amb les respostes, sense trànsit addicional per segon. El servidor conserva el primer temps rebut de cada resposta i comprova que sigui creixent. No és un cronòmetre antitrampes: depèn del navegador del jugador.
 
