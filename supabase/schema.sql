@@ -60,6 +60,7 @@ create table public.qeq_answers (
  position integer not null,
  choice text not null,
  correct boolean not null,
+ elapsed_ms bigint check(elapsed_ms between 0 and 2592000000),
  received_at timestamptz not null default now(),
  primary key(attempt_id,photo_id),
  unique(attempt_id,position)
@@ -104,7 +105,7 @@ create function public.qeq_save_attempt(p_data jsonb,p_secret_hash text) returns
 language plpgsql security invoker set search_path='' as $$
 declare
  cat jsonb; cards jsonb; ids jsonb; answers jsonb; a jsonb; c jsonb; existing public.qeq_attempts%rowtype;
- device uuid; aid uuid; first_name_input text; last_name_input text; n integer; i integer; total_count integer; canonical jsonb; success_count integer;
+ device uuid; aid uuid; first_name_input text; last_name_input text; n integer; i integer; total_count integer; canonical jsonb; success_count integer; elapsed bigint; previous_elapsed bigint:=0;
 begin
  aid=(p_data->>'id')::uuid; device=(p_data->>'deviceId')::uuid;
  if device is null then raise exception 'Dispositiu no vàlid';end if;
@@ -139,11 +140,21 @@ begin
     ((coalesce(c->>'kind','single')='pair') and a->>'choice' not in ('Èric i Aleix','Aleix i Èric')) or
     ((coalesce(c->>'kind','single')<>'pair') and a->>'choice' not in ('Èric','Aleix')) then raise exception 'Decisió no vàlida';end if;
   if exists(select 1 from public.qeq_answers where attempt_id=aid and position=i and (photo_id<>a->>'id' or choice<>a->>'choice')) then raise exception 'No es pot canviar una decisió desada';end if;
-  insert into public.qeq_answers(attempt_id,photo_id,position,choice,correct) values(aid,a->>'id',i,a->>'choice',a->>'choice'=c->>'person') on conflict do nothing;
+  elapsed=null;
+  if a->>'elapsedMs' is not null then
+   if (a->>'elapsedMs')!~'^[0-9]{1,10}$' then raise exception 'Temps no vàlid';end if;
+   elapsed=(a->>'elapsedMs')::bigint;
+   if elapsed<previous_elapsed or elapsed>2592000000 then raise exception 'Temps no vàlid';end if;
+  end if;
+  if exists(select 1 from public.qeq_answers where attempt_id=aid and position=i) then
+   select elapsed_ms into elapsed from public.qeq_answers where attempt_id=aid and position=i;
+  end if;
+  previous_elapsed=coalesce(elapsed,previous_elapsed);
+  insert into public.qeq_answers(attempt_id,photo_id,position,choice,correct,elapsed_ms) values(aid,a->>'id',i,a->>'choice',a->>'choice'=c->>'person',elapsed) on conflict do nothing;
  end loop;
  select count(*) filter(where correct)::integer into success_count from public.qeq_answers where attempt_id=aid;
  update public.qeq_attempts set answered=n,correct=success_count,updated_at=now(),
- data=jsonb_build_object('schema',2,'id',aid,'deviceId',device,'acknowledged',least(n,greatest(coalesce((p_data->>'acknowledged')::integer,0),coalesce((existing.data->>'acknowledged')::integer,0))),'firstName',first_name_input,'lastName',last_name_input,'catalogVersion',existing.catalog_version,'cards',canonical,'answers',coalesce((select jsonb_agg(jsonb_build_object('id',photo_id,'choice',choice) order by position) from public.qeq_answers where attempt_id=aid),'[]'::jsonb),'startedAt',existing.started_at,'updatedAt',now(),'receivedAt',now()) where id=aid;
+ data=jsonb_build_object('schema',2,'id',aid,'deviceId',device,'acknowledged',least(n,greatest(coalesce((p_data->>'acknowledged')::integer,0),coalesce((existing.data->>'acknowledged')::integer,0))),'firstName',first_name_input,'lastName',last_name_input,'catalogVersion',existing.catalog_version,'cards',canonical,'answers',coalesce((select jsonb_agg(jsonb_build_object('id',photo_id,'choice',choice,'elapsedMs',elapsed_ms) order by position) from public.qeq_answers where attempt_id=aid),'[]'::jsonb),'timerVersion',coalesce(existing.data->'timerVersion',p_data->'timerVersion'),'activeMs',previous_elapsed,'startedAt',existing.started_at,'updatedAt',now(),'receivedAt',now()) where id=aid;
  return jsonb_build_object('ok',true,'accepted',n);
 end;$$;
 revoke all on function public.qeq_save_attempt(jsonb,text) from public,anon,authenticated;
