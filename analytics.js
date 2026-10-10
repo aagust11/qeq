@@ -1,6 +1,6 @@
 import {tally} from './core.js';
 export function leaderboard(attempts,closed=false){
- return attempts.filter(a=>a.cards.length>0&&(closed||a.answers.length===a.cards.length)).map(a=>({...a,score:tally(a)})).sort((a,b)=>b.score.correct-a.score.correct||(durationMs(a)??Infinity)-(durationMs(b)??Infinity)||a.startedAt.localeCompare(b.startedAt));
+ return attempts.filter(a=>a.eligible!==false&&a.cards.length>0&&(closed||a.answers.length===a.cards.length)).map(a=>({...a,score:tally(a)})).sort((a,b)=>b.score.correct-a.score.correct||(durationMs(a)??Infinity)-(durationMs(b)??Infinity)||a.startedAt.localeCompare(b.startedAt));
 }
 export function photoExtremes(photos){
  const answered=photos.filter(p=>p.responses>0);

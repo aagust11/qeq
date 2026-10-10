@@ -2,6 +2,7 @@ const PREFIX = 'qeq-v2-';
 export function read(name, fallback = null) { try { return JSON.parse(localStorage.getItem(PREFIX + name)) ?? fallback; } catch { return fallback; } }
 export function write(name, value) { localStorage.setItem(PREFIX + name, JSON.stringify(value)); }
 export function saveAttempt(attempt) {
+  if(read('revoked-'+attempt.id,false))throw new Error('Partida eliminada per l’organització.');
   const previous=read('attempt-'+attempt.id);
   if(previous){
     if(previous.answers.length>attempt.answers.length)throw new Error('La partida té respostes més recents en una altra pestanya.');
@@ -30,3 +31,11 @@ export function deviceIdentity(){
 }
 export async function exclusive(action){return navigator.locks?navigator.locks.request('qeq-one-device-session',action):action();}
 export function savedSession(){const id=read('device')?.attemptId||read('active');return id?read('attempt-'+id):null;}
+
+export function resetSession(expectedId){
+ const device=deviceIdentity();if(device.attemptId!==expectedId)return;
+ write('revoked-'+expectedId,true);
+ for(const name of ['attempt-','final-','closed-sync-','cloud-sent-','sync-error-'])localStorage.removeItem(PREFIX+name+expectedId);
+ write('device',{...device,attemptId:uuid()});write('active',null);
+ document.dispatchEvent(new CustomEvent('qeq-reset'));
+}

@@ -10,7 +10,7 @@ class JointTest(unittest.TestCase):
     def test_catalog_prefixes_case_and_ignored_names(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)
-            for name in ('index.html','style.css','app.js','core.js','storage.js','sync.js','sw.js','admin.js','cloud-config.js','analytics.js','presentation.js','presentation.css'):(root/name).touch()
+            for name in ('index.html','style.css','app.js','core.js','storage.js','sync.js','sw.js','admin.js','cloud-config.js','analytics.js','presentation.js','presentation.css','preload.js'):(root/name).touch()
             for name in ('admin','assets','fotos/Conjuntes'):(root/name).mkdir(parents=True,exist_ok=True)
             for name in ('ea_1.jpg','AE_2.PNG','vacances.jpg'):(root/'fotos/Conjuntes'/name).write_bytes(b'test-fixture')
             output=io.StringIO()

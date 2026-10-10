@@ -3,3 +3,5 @@
 
 .pair-question .choices{max-width:620px}.pair-question .choices button{font-size:clamp(17px,3vw,24px)}.pair-question .stamp{font-size:clamp(20px,4vw,32px);left:4%;right:4%}.pair-question .photo-card{width:540px}
 .name-button{background:#edf1fc;color:var(--navy);padding:9px 12px;border-radius:7px;font-weight:700;text-align:left}.photo-thumb{padding:0;background:#f3efdf;border-radius:9px;overflow:hidden;display:block}.photo-thumb img{display:block;width:92px;height:76px;object-fit:contain}.photo-highlights{display:flex;gap:18px;overflow-x:auto;padding:8px 0 16px}.photo-highlights article{flex:0 0 180px}.photo-highlights img{width:180px;height:150px}.photo-highlights p{font-size:12px;font-weight:700}#photoDialog{max-width:850px}#largePhoto{width:100%;max-height:70vh;object-fit:contain}summary{cursor:pointer;font-weight:700}#passwordForm{max-width:430px}#passwordForm button{margin-top:15px}
+
+.row-actions{display:flex;gap:7px;flex-wrap:wrap;min-width:180px}.row-actions button{padding:9px 11px;font-size:12px}.danger{color:#b1251c;border-color:#b1251c60}

@@ -1,4 +1,4 @@
-import {read, write, savedSession,deviceIdentity,saveAttempt} from './storage.js';
+import {read, write, savedSession,deviceIdentity,saveAttempt,resetSession} from './storage.js';
 import {CLOUD_API} from './cloud-config.js';
 export const usingCloud = location.protocol === 'https:';
 export const receiptKey = id => (usingCloud?'cloud-sent-':'sent-')+id;
@@ -18,19 +18,24 @@ export async function api(path,options={}) {
  if(usingCloud&&headers.Authorization){headers['X-Admin-Token']=headers.Authorization.replace(/^Bearer /,'');delete headers.Authorization;}
  const r=await fetch(endpoint(path),{...options,cache:'no-store',headers,signal:AbortSignal.timeout(15000)});
  const data=await r.json().catch(()=>({error:'Resposta del servidor no vàlida.'}));
- if(!r.ok){const e=new Error(data.error||'No s’ha pogut connectar.');e.status=r.status;e.needsSnapshot=data.needsSnapshot;throw e;}return data;
+ if(!r.ok){const e=new Error(data.error||'No s’ha pogut connectar.');e.status=r.status;e.needsSnapshot=data.needsSnapshot;e.reset=data.reset;throw e;}return data;
 }
 export async function syncAll() {
  if(running)return;running=true;
  try{
   const info=await getServer();
   if(!info){document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:false,known:usingCloud||read('server-known',false)}}));return;}
-  write('settings',info.settings);
+  const previousSettings=read('settings',{});write('settings',info.settings);
+  if(usingCloud&&info.settings.controlRevision!==read('control-checked')){
+   await recoverSession();
+  }
+  if(info.settings.gamePaused&&!info.settings.gameClosed){document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:true,settings:info.settings,previousSettings}}));return;}
+
   if(info.settings.gameClosed){
    const a=savedSession();
-   if(a&&!read('closed-sync-'+a.id,false)){
-    try{const device=deviceIdentity();const result=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id})});
-     write('final-'+a.id,result.attempt?{...result.attempt,secret:a.secret}:{...a,answers:[]});write('closed-sync-'+a.id,true);
+   if(a&&read('closed-sync-'+a.id)!==info.settings.closedAt){
+    try{const device=deviceIdentity();const result=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id,attemptId:device.attemptId})});
+     write('final-'+a.id,result.attempt?{...result.attempt,secret:a.secret}:{...a,answers:[]});write('closed-sync-'+a.id,info.settings.closedAt);
     }catch{}
    }
    document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:true,settings:info.settings}}));return;
@@ -45,7 +50,7 @@ export async function syncAll() {
     if(result.recovered&&result.attempt){adoptRecovered(result.attempt,device);}
     else{write(receiptKey(a.id),result.accepted??a.answers.length);write(ackKey,a.acknowledged||0);}
     write('sync-error-'+a.id,null);
-   }catch(e){if(e.needsSnapshot)write(receiptKey(a.id),-1);write('sync-error-'+a.id,e.message);}
+   }catch(e){if(e.reset){resetSession(a.id);continue;}if(e.needsSnapshot)write(receiptKey(a.id),-1);write('sync-error-'+a.id,e.message);}
   }
   document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:true,settings:info.settings}}));
  }finally{running=false;}
@@ -61,6 +66,6 @@ function adoptRecovered(remote,device){
 export async function recoverSession(){
  const device=deviceIdentity();
  if(!usingCloud)return savedSession();
- try{const r=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id})});if(r.attempt)return adoptRecovered(r.attempt,device);}
+ try{const r=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id,attemptId:device.attemptId})});write('control-checked',read('settings',{}).controlRevision);if(r.reset){resetSession(device.attemptId);return null;}if(r.attempt)return adoptRecovered(r.attempt,device);}
  catch{}return savedSession();
 }

@@ -4,6 +4,7 @@ create table public.qeq_settings (
  hide_names boolean not null default true,
  reveal_answers boolean not null default false,
  closed_at timestamptz,
+ paused boolean not null default false,
  updated_at timestamptz not null default now()
 );
 insert into public.qeq_settings(id) values(true);
@@ -40,6 +41,7 @@ create table public.qeq_photos (
 create table public.qeq_attempts (
  id uuid primary key,
  device_id uuid,
+ eligible boolean not null default true,
  secret_hash text not null,
  catalog_version text not null references public.qeq_catalogs(version),
  first_name text not null check(length(first_name) between 1 and 80),
@@ -102,6 +104,14 @@ end;$$;
 revoke all on function public.qeq_take_login_slot(text,integer) from public,anon,authenticated;
 grant execute on function public.qeq_take_login_slot(text,integer) to service_role;
 
+
+create table public.qeq_revoked_attempts(
+ id uuid primary key,device_id uuid not null,secret_hash text not null,revoked_at timestamptz not null default now()
+);
+alter table public.qeq_revoked_attempts enable row level security;
+revoke all on public.qeq_revoked_attempts from public,anon,authenticated;
+grant all on public.qeq_revoked_attempts to service_role;
+
 create function public.qeq_save_attempt(p_data jsonb,p_secret_hash text) returns jsonb
 language plpgsql security invoker set search_path='' as $$
 declare
@@ -110,7 +120,9 @@ declare
 begin
  perform 1 from public.qeq_settings where id=true for share;
  if exists(select 1 from public.qeq_settings where id=true and closed_at is not null) then raise exception 'El joc ja està tancat. Les respostes noves no compten.';end if;
+ if exists(select 1 from public.qeq_settings where id=true and paused) then raise exception 'El joc està pausat.';end if;
  aid=(p_data->>'id')::uuid; device=(p_data->>'deviceId')::uuid;
+ if exists(select 1 from public.qeq_revoked_attempts where id=aid) then raise exception 'Partida eliminada per l’organització.';end if;
  if device is null then raise exception 'Dispositiu no vàlid';end if;
  first_name_input=btrim(p_data->>'firstName');last_name_input=btrim(p_data->>'lastName');
  if p_data->>'schema'<>'2' or length(first_name_input) not between 1 and 80 or length(last_name_input) not between 1 and 120 or first_name_input is null or last_name_input is null then raise exception 'Nom o partida no vàlids';end if;
@@ -176,3 +188,30 @@ begin
 end;$$;
 revoke all on function public.qeq_finish_game() from public,anon,authenticated;
 grant execute on function public.qeq_finish_game() to service_role;
+
+create or replace function public.qeq_set_playing(p_active boolean) returns jsonb
+language plpgsql security invoker set search_path='' as $$
+begin
+ if p_active is null then raise exception 'Estat no vàlid';end if;
+ update public.qeq_settings set paused=not p_active,closed_at=case when p_active then null else closed_at end,updated_at=clock_timestamp() where id=true;
+ return jsonb_build_object('ok',true);
+end;$$;
+create or replace function public.qeq_manage_attempt(p_id uuid,p_action text) returns jsonb
+language plpgsql security invoker set search_path='' as $$
+declare a public.qeq_attempts%rowtype;
+begin
+ -- Same lock order as saving; prevents an in-flight save resurrecting a deleted game.
+ perform 1 from public.qeq_settings where id=true for update;
+ select * into a from public.qeq_attempts where id=p_id for update;
+ if a.id is null then return jsonb_build_object('ok',true);end if;
+ if p_action='delete' then
+  insert into public.qeq_revoked_attempts(id,device_id,secret_hash) values(a.id,a.device_id,a.secret_hash) on conflict do nothing;
+  delete from public.qeq_attempts where id=p_id;
+ elsif p_action in ('exclude','include') then
+  update public.qeq_attempts set eligible=p_action='include',updated_at=clock_timestamp() where id=p_id;
+ else raise exception 'Acció no vàlida';end if;
+ update public.qeq_settings set updated_at=clock_timestamp() where id=true;
+ return jsonb_build_object('ok',true);
+end;$$;
+revoke all on function public.qeq_set_playing(boolean),public.qeq_manage_attempt(uuid,text) from public,anon,authenticated;
+grant execute on function public.qeq_set_playing(boolean),public.qeq_manage_attempt(uuid,text) to service_role;

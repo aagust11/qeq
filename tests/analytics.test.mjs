@@ -20,3 +20,7 @@ test('closing the game includes every unfinished attempt without inventing answe
  assert.equal(winners([a],true).players[0].score.correct,1);assert.equal(winners([a],true).players[0].score.wrong,0);
  assert.equal(a.answers.length,1);
 });
+test('excluded players keep their data but cannot win, and can be included again',()=>{
+ const a={id:'a',startedAt:'a',eligible:false,cards:[{id:'p',person:'Èric'}],answers:[{id:'p',choice:'Èric',elapsedMs:1}]};
+ assert.equal(winners([a],true).players.length,0);assert.equal(a.answers.length,1);a.eligible=true;assert.equal(winners([a],true).players.length,1);
+});
