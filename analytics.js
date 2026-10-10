@@ -1,6 +1,6 @@
 import {tally} from './core.js';
-export function leaderboard(attempts){
- return attempts.filter(a=>a.cards.length>0&&a.answers.length===a.cards.length).map(a=>({...a,score:tally(a)})).sort((a,b)=>b.score.correct-a.score.correct||(durationMs(a)??Infinity)-(durationMs(b)??Infinity)||a.startedAt.localeCompare(b.startedAt));
+export function leaderboard(attempts,closed=false){
+ return attempts.filter(a=>a.cards.length>0&&(closed||a.answers.length===a.cards.length)).map(a=>({...a,score:tally(a)})).sort((a,b)=>b.score.correct-a.score.correct||(durationMs(a)??Infinity)-(durationMs(b)??Infinity)||a.startedAt.localeCompare(b.startedAt));
 }
 export function photoExtremes(photos){
  const answered=photos.filter(p=>p.responses>0);
@@ -16,8 +16,8 @@ export function durationMs(a){
  if(!a.answers.length||a.answers.some(v=>!Number.isSafeInteger(v.elapsedMs)||v.elapsedMs<0))return null;
  return a.answers.at(-1).elapsedMs;
 }
-export function winners(attempts){
- const ranking=leaderboard(attempts);if(!ranking.length)return {players:[],missingTime:false};
+export function winners(attempts,closed=false){
+ const ranking=leaderboard(attempts,closed);if(!ranking.length)return {players:[],missingTime:false};
  const top=ranking.filter(a=>a.score.correct===ranking[0].score.correct);
  const missingTime=top.length>1&&top.some(a=>durationMs(a)===null);
  const fastest=Math.min(...top.map(a=>durationMs(a)??Infinity));

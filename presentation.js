@@ -6,7 +6,7 @@ function node(tag,text,cls){const e=document.createElement(tag);if(text!==undefi
 function lock(){data=null;token='';sessionStorage.removeItem(key);$('presentation').hidden=true;$('names').hidden=true;$('locked').hidden=false;$('status').textContent='Pantalla privada de l’organització';for(const id of ['winners','correctPhotos','wrongPhotos'])$(id).replaceChildren();}
 function render(){
  const attempts=[...data.attempts].sort((a,b)=>a.startedAt.localeCompare(b.startedAt)||a.id.localeCompare(b.id));
- const result=winners(attempts),finished=attempts.filter(a=>a.cards.length&&a.answers.length===a.cards.length).length;
+ const result=winners(attempts,data.settings.gameClosed),finished=data.settings.gameClosed?attempts.length:attempts.filter(a=>a.cards.length&&a.answers.length===a.cards.length).length;
  $('winnerTitle').textContent=!result.players.length?'Qui s’endurà la victòria?':result.missingTime?'Empat en encerts':result.players.length===1?'Ja tenim guanyador/a!':'Una victòria compartida!';
  $('winners').replaceChildren(...result.players.map((a,i)=>{const card=node('article',undefined,'winner-card');card.style.setProperty('--delay',`${i*90}ms`);card.append(node('span','★','winner-star'),node('p',showNames?`${a.firstName} ${a.lastName}`:`Participant ${attempts.findIndex(p=>p.id===a.id)+1}`,'winner-name'),node('strong',`${a.score.correct}`,'winner-score'),node('span',`encerts de ${a.cards.length}`,'winner-label'),node('p',formatTime(durationMs(a)),'winner-time'));return card;}));
  if(!result.players.length)$('winners').append(node('p','El podi s’omplirà quan arribin les primeres partides acabades.','empty-podium'));
@@ -19,7 +19,7 @@ function render(){
  $('names').textContent=showNames?'Ocultar els noms':'Mostrar els noms';$('names').setAttribute('aria-pressed',String(showNames));
 }
 async function refresh(){if(busy||!token)return;try{if(window.opener&&!window.opener.closed&&!window.opener.sessionStorage.getItem(key)){lock();return;}}catch{}busy=true;
- try{const r=await api('admin/state'+(usingCloud&&revision?'?since='+encodeURIComponent(revision):''),{headers:{Authorization:'Bearer '+token}});if(!r.unchanged){data=r;revision=r.revision||'';if(initial){showNames=!r.settings.hideNames;initial=false;}render();}$('presentation').hidden=false;$('locked').hidden=true;$('names').hidden=false;$('status').textContent='En directe · actualitzat a les '+new Date().toLocaleTimeString('ca-ES');}
+ try{const r=await api('admin/state'+(usingCloud&&revision?'?since='+encodeURIComponent(revision):''),{headers:{Authorization:'Bearer '+token}});if(!r.unchanged){data=r;revision=r.revision||'';if(initial){showNames=!r.settings.hideNames;initial=false;}render();}$('presentation').hidden=false;$('locked').hidden=true;$('names').hidden=false;$('status').textContent=(data.settings.gameClosed?'Joc tancat · resultats finals · ':'En directe · actualitzat a les ')+new Date().toLocaleTimeString('ca-ES');}
  catch(e){if(e.status===401)lock();else $('status').textContent=data?'Sense connexió · es mostren els últims resultats rebuts':'No s’han pogut carregar els resultats. Es tornarà a intentar.';}
  finally{busy=false;}
 }

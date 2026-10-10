@@ -3,6 +3,7 @@ create table public.qeq_settings (
  id boolean primary key default true check(id),
  hide_names boolean not null default true,
  reveal_answers boolean not null default false,
+ closed_at timestamptz,
  updated_at timestamptz not null default now()
 );
 insert into public.qeq_settings(id) values(true);
@@ -107,6 +108,8 @@ declare
  cat jsonb; cards jsonb; ids jsonb; answers jsonb; a jsonb; c jsonb; existing public.qeq_attempts%rowtype;
  device uuid; aid uuid; first_name_input text; last_name_input text; n integer; i integer; total_count integer; canonical jsonb; success_count integer; elapsed bigint; previous_elapsed bigint:=0;
 begin
+ perform 1 from public.qeq_settings where id=true for share;
+ if exists(select 1 from public.qeq_settings where id=true and closed_at is not null) then raise exception 'El joc ja està tancat. Les respostes noves no compten.';end if;
  aid=(p_data->>'id')::uuid; device=(p_data->>'deviceId')::uuid;
  if device is null then raise exception 'Dispositiu no vàlid';end if;
  first_name_input=btrim(p_data->>'firstName');last_name_input=btrim(p_data->>'lastName');
@@ -159,3 +162,17 @@ begin
 end;$$;
 revoke all on function public.qeq_save_attempt(jsonb,text) from public,anon,authenticated;
 grant execute on function public.qeq_save_attempt(jsonb,text) to service_role;
+
+create or replace function public.qeq_finish_game() returns jsonb
+language plpgsql security invoker set search_path='' as $$
+declare finished timestamptz;
+begin
+ select closed_at into finished from public.qeq_settings where id=true for update;
+ if finished is null then
+  finished=clock_timestamp();
+  update public.qeq_settings set closed_at=finished,updated_at=finished where id=true;
+ end if;
+ return jsonb_build_object('ok',true,'closedAt',finished);
+end;$$;
+revoke all on function public.qeq_finish_game() from public,anon,authenticated;
+grant execute on function public.qeq_finish_game() to service_role;

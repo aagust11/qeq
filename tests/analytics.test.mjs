@@ -14,3 +14,9 @@ test('winner uses correct answers then active time; exact ties share victory',()
  assert.equal(durationMs(make('old',undefined)),null);
  assert.deepEqual(winners([]).players,[]);
 });
+test('closing the game includes every unfinished attempt without inventing answers',()=>{
+ const a={id:'a',startedAt:'a',cards:[{id:'p',person:'Èric'},{id:'q',person:'Aleix'}],answers:[{id:'p',choice:'Èric',elapsedMs:1234}]};
+ assert.equal(leaderboard([a]).length,0);assert.equal(leaderboard([a],true).length,1);
+ assert.equal(winners([a],true).players[0].score.correct,1);assert.equal(winners([a],true).players[0].score.wrong,0);
+ assert.equal(a.answers.length,1);
+});

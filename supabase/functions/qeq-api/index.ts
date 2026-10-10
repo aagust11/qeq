@@ -32,7 +32,7 @@ Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
  const path=new URL(req.url).pathname.split('/qeq-api/')[1]||'';
  try{
- if(path==='info'&&req.method==='GET'){const [settings]=await db('qeq_settings?select=reveal_answers');return reply({service:'qeq-cloud-v1',settings:{revealAnswers:settings.reveal_answers}});}
+ if(path==='info'&&req.method==='GET'){const [settings]=await db('qeq_settings?select=reveal_answers,closed_at');return reply({service:'qeq-cloud-v1',settings:{revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at}});}
  if(path==='admin/login'&&req.method==='POST'){
   const minute=Math.floor(Date.now()/60000);const ip=req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown';
   const allowed=await db('rpc/qeq_take_login_slot','POST',{p_bucket:minute+':'+await sha(ip),p_limit:10});
@@ -48,12 +48,13 @@ Deno.serve(async req=>{
   const tokenHash=await requireAdmin(req);
   if(path==='admin/logout'&&req.method==='POST'){await db('qeq_admin_sessions?token_hash=eq.'+tokenHash,'DELETE');return reply({ok:true});}
   if(path==='admin/state'&&req.method==='GET'){
-   const [[settings],latest]=await Promise.all([db('qeq_settings?select=hide_names,reveal_answers,updated_at'),db('qeq_attempts?select=updated_at&order=updated_at.desc&limit=1')]);
+   const [[settings],latest]=await Promise.all([db('qeq_settings?select=hide_names,reveal_answers,closed_at,updated_at'),db('qeq_attempts?select=updated_at&order=updated_at.desc&limit=1')]);
    const revision=settings.updated_at+'|'+(latest[0]?.updated_at||'empty');
    if(new URL(req.url).searchParams.get('since')===revision)return reply({unchanged:true,revision});
    const [attempts,photos]=await Promise.all([allRows('qeq_attempts?select=data&order=started_at,id'),allRows('qeq_photo_summary?select=*&order=id')]);
-   return reply({revision,settings:{hideNames:settings.hide_names,revealAnswers:settings.reveal_answers},attempts:attempts.map((a:any)=>a.data),photos});
+   return reply({revision,settings:{hideNames:settings.hide_names,revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at},attempts:attempts.map((a:any)=>a.data),photos});
   }
+  if(path==='admin/finish'&&req.method==='POST'){return reply(await db('rpc/qeq_finish_game','POST',{}));}
   if(path==='admin/settings'&&req.method==='PUT'){const body=await json(req);if(typeof body.hideNames!=='boolean'||typeof body.revealAnswers!=='boolean')throw fail('Configuració no vàlida.');await db('qeq_settings?id=eq.true','PATCH',{hide_names:body.hideNames,reveal_answers:body.revealAnswers,updated_at:new Date().toISOString()});return reply({ok:true});}
   if(path==='admin/password'&&req.method==='PUT'){const body=await json(req);if(typeof body.password!=='string'||body.password.length<12||body.password.length>128)throw fail('La contrasenya ha de tenir entre 12 i 128 caràcters.');const salt=hex(crypto.getRandomValues(new Uint8Array(24)).buffer);await db('qeq_admin_credentials?id=eq.true','PATCH',{salt,password_hash:await passwordHash(body.password,salt,600000),iterations:600000,updated_at:new Date().toISOString()});await db('qeq_admin_sessions?token_hash=neq.'+tokenHash,'DELETE');return reply({ok:true});}
   throw fail('Ruta no disponible.',404);

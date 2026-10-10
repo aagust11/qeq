@@ -26,6 +26,15 @@ export async function syncAll() {
   const info=await getServer();
   if(!info){document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:false,known:usingCloud||read('server-known',false)}}));return;}
   write('settings',info.settings);
+  if(info.settings.gameClosed){
+   const a=savedSession();
+   if(a&&!read('closed-sync-'+a.id,false)){
+    try{const device=deviceIdentity();const result=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id})});
+     write('final-'+a.id,result.attempt?{...result.attempt,secret:a.secret}:{...a,answers:[]});write('closed-sync-'+a.id,true);
+    }catch{}
+   }
+   document.dispatchEvent(new CustomEvent('qeq-sync',{detail:{online:true,settings:info.settings}}));return;
+  }
   for(const a of [savedSession()]){
    if(!a||a.schema!==2||!a.secret)continue;
    const device=deviceIdentity();a.deviceId=device.id;
