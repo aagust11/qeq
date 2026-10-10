@@ -1,5 +1,9 @@
 export const BLOCK_SIZE = 7;
 export const PEOPLE = ['Èric', 'Aleix'];
+export const ORDERS = ['Èric i Aleix', 'Aleix i Èric'];
+export const optionsFor = card => card.kind === 'pair' ? ORDERS : PEOPLE;
+export const isPair = card => card.kind === 'pair';
+export const truthLabel = card => isPair(card) ? `D’esquerra a dreta: ${card.person}` : `És ${card.person}`;
 export function shuffled(cards, random = Math.random) {
   const result = [...cards];
   for (let i = result.length - 1; i > 0; i--) {
@@ -30,8 +34,8 @@ export function validAttempt(a) {
   if (!Array.isArray(a.cards) || !a.cards.length || a.cards.length > 2000 || !Array.isArray(a.answers) || a.answers.length > a.cards.length) return false;
   const seen = new Set();
   for (const c of a.cards) {
-    if (!c || typeof c.id !== 'string' || seen.has(c.id) || !PEOPLE.includes(c.person) || !/^photos\/[a-f0-9]{24}\.(jpg|jpeg|png|webp)$/.test(c.src)) return false;
+    if (!c || typeof c.id !== 'string' || seen.has(c.id) || !optionsFor(c).includes(c.person) || !/^photos\/[a-f0-9]{24}\.(jpg|jpeg|png|webp)$/.test(c.src)) return false;
     seen.add(c.id);
   }
-  return a.answers.every((v,i) => v?.id === a.cards[i].id && PEOPLE.includes(v.choice));
+  return a.answers.every((v,i) => v?.id === a.cards[i].id && optionsFor(a.cards[i]).includes(v.choice));
 }

@@ -35,7 +35,7 @@ class Store:
             if not isinstance(cards,list) or not cards or len(cards)!=len(lookup) or not isinstance(answers,list) or len(answers)>len(cards): raise ValueError('Nombre de fotos no vàlid.')
             ids=[c.get('id') for c in cards if isinstance(c,dict)]
             if len(ids)!=len(cards) or len(set(ids))!=len(ids) or set(ids)!=set(lookup): raise ValueError('Fotos no vàlides.')
-            if any(not isinstance(a,dict) or a.get('id')!=ids[i] or a.get('choice') not in ('Èric','Aleix') for i,a in enumerate(answers)): raise ValueError('Decisions no vàlides.')
+            if any(not isinstance(a,dict) or a.get('id')!=ids[i] or a.get('choice') not in (('Èric i Aleix','Aleix i Èric') if lookup[ids[i]].get('kind')=='pair' else ('Èric','Aleix')) for i,a in enumerate(answers)): raise ValueError('Decisions no vàlides.')
             old=db.execute('SELECT secret,data FROM attempts WHERE id=?',(ident,)).fetchone()
             digest=hashlib.sha256(secret.encode()).hexdigest()
             if old:

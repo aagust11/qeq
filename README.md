@@ -4,7 +4,7 @@ Interfície en català, nom i cognoms, botons i lliscament (Èric: esquerra/groc
 
 ## Afegir les fotos
 
-Puja les fotos a **`fotos/Èric/`** i **`fotos/Aleix/`** a `main`. JPG, JPEG, PNG o WEBP. Cada foto és una pregunta; hi ha d’aparèixer només el germà corresponent. Per a una foto de tots dos, puja dos retalls independents. GitHub Actions genera automàticament el catàleg i publica el joc. Les sis fotos originals es fan servir només per a la portada: no tenen identitats suposades. Fins que pugis fotos a les carpetes, no es pot començar el repte.
+Puja les fotos individuals a **`fotos/Èric/`** i **`fotos/Aleix/`** a `main`. JPG, JPEG, PNG o WEBP. Cada foto és una pregunta; hi ha d’aparèixer només el germà corresponent. Per a fotos de tots dos, fes servir `fotos/Conjuntes/`: si el nom comença per `ea`, l’ordre d’esquerra a dreta és Èric i Aleix; si comença per `ae`, és Aleix i Èric. No cal retallar-les. S’accepten majúscules i minúscules. Les fotos conjuntes sense aquests prefixos s’ignoren amb un avís al registre de publicació. Cada foto conjunta és una pregunta i val un punt si s’encerta tot l’ordre. GitHub Actions genera automàticament el catàleg i publica el joc. Les sis fotos originals es fan servir només per a la portada: no tenen identitats suposades. Fins que pugis fotos a les carpetes, no es pot començar el repte.
 
 Els fitxers publicats tenen noms neutres. Això amaga la resposta en el nom de la foto, però **aquest joc de festa no és un examen antitrampes**: el catàleg del navegador conté les identitats per poder calcular els resultats sense connexió. Un usuari tècnic que inspeccioni el codi o el repositori públic pot descobrir-les. La interfície les oculta fins a l’ordre de l’administració.
 
