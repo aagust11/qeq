@@ -5,6 +5,7 @@ create table public.qeq_settings (
  reveal_answers boolean not null default false,
  closed_at timestamptz,
  paused boolean not null default false,
+ game_generation integer not null default 1,
  updated_at timestamptz not null default now()
 );
 insert into public.qeq_settings(id) values(true);
@@ -119,6 +120,7 @@ declare
  device uuid; aid uuid; first_name_input text; last_name_input text; n integer; i integer; total_count integer; canonical jsonb; success_count integer; elapsed bigint; previous_elapsed bigint:=0;
 begin
  perform 1 from public.qeq_settings where id=true for share;
+ if coalesce((p_data->>'gameGeneration')::integer,1)<>(select game_generation from public.qeq_settings where id=true) then raise exception 'Partida d’un joc anterior.';end if;
  if exists(select 1 from public.qeq_settings where id=true and closed_at is not null) then raise exception 'El joc ja està tancat. Les respostes noves no compten.';end if;
  if exists(select 1 from public.qeq_settings where id=true and paused) then raise exception 'El joc està pausat.';end if;
  aid=(p_data->>'id')::uuid; device=(p_data->>'deviceId')::uuid;
@@ -169,7 +171,7 @@ begin
  end loop;
  select count(*) filter(where correct)::integer into success_count from public.qeq_answers where attempt_id=aid;
  update public.qeq_attempts set answered=n,correct=success_count,updated_at=now(),
- data=jsonb_build_object('schema',2,'id',aid,'deviceId',device,'acknowledged',least(n,greatest(coalesce((p_data->>'acknowledged')::integer,0),coalesce((existing.data->>'acknowledged')::integer,0))),'firstName',first_name_input,'lastName',last_name_input,'catalogVersion',existing.catalog_version,'cards',canonical,'answers',coalesce((select jsonb_agg(jsonb_build_object('id',photo_id,'choice',choice,'elapsedMs',elapsed_ms) order by position) from public.qeq_answers where attempt_id=aid),'[]'::jsonb),'timerVersion',coalesce(existing.data->'timerVersion',p_data->'timerVersion'),'activeMs',previous_elapsed,'startedAt',existing.started_at,'updatedAt',now(),'receivedAt',now()) where id=aid;
+ data=jsonb_build_object('schema',2,'gameGeneration',(select game_generation from public.qeq_settings where id=true),'id',aid,'deviceId',device,'acknowledged',least(n,greatest(coalesce((p_data->>'acknowledged')::integer,0),coalesce((existing.data->>'acknowledged')::integer,0))),'firstName',first_name_input,'lastName',last_name_input,'catalogVersion',existing.catalog_version,'cards',canonical,'answers',coalesce((select jsonb_agg(jsonb_build_object('id',photo_id,'choice',choice,'elapsedMs',elapsed_ms) order by position) from public.qeq_answers where attempt_id=aid),'[]'::jsonb),'timerVersion',coalesce(existing.data->'timerVersion',p_data->'timerVersion'),'activeMs',previous_elapsed,'startedAt',existing.started_at,'updatedAt',now(),'receivedAt',now()) where id=aid;
  return jsonb_build_object('ok',true,'accepted',n);
 end;$$;
 revoke all on function public.qeq_save_attempt(jsonb,text) from public,anon,authenticated;
@@ -215,3 +217,19 @@ begin
 end;$$;
 revoke all on function public.qeq_set_playing(boolean),public.qeq_manage_attempt(uuid,text) from public,anon,authenticated;
 grant execute on function public.qeq_set_playing(boolean),public.qeq_manage_attempt(uuid,text) to service_role;
+
+create or replace function public.qeq_new_game(p_expected_generation integer) returns jsonb
+language plpgsql security invoker set search_path='' as $$
+declare current_generation integer;
+begin
+ select game_generation into current_generation from public.qeq_settings where id=true for update;
+ if p_expected_generation is null then raise exception 'Cal indicar el joc actual';end if;
+ if p_expected_generation<>current_generation then return jsonb_build_object('ok',true,'unchanged',true,'gameGeneration',current_generation);end if;
+ insert into public.qeq_revoked_attempts(id,device_id,secret_hash)
+ select id,coalesce(device_id,id),secret_hash from public.qeq_attempts on conflict do nothing;
+ delete from public.qeq_attempts;
+ update public.qeq_settings set game_generation=current_generation+1,paused=false,closed_at=null,reveal_answers=false,updated_at=clock_timestamp() where id=true;
+ return jsonb_build_object('ok',true,'gameGeneration',current_generation+1);
+end;$$;
+revoke all on function public.qeq_new_game(integer) from public,anon,authenticated;
+grant execute on function public.qeq_new_game(integer) to service_role;

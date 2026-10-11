@@ -32,7 +32,7 @@ Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
  const path=new URL(req.url).pathname.split('/qeq-api/')[1]||'';
  try{
- if(path==='info'&&req.method==='GET'){const [settings]=await db('qeq_settings?select=reveal_answers,closed_at,paused,updated_at');return reply({service:'qeq-cloud-v1',settings:{revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at,gamePaused:settings.paused,controlRevision:settings.updated_at}});}
+ if(path==='info'&&req.method==='GET'){const [settings]=await db('qeq_settings?select=reveal_answers,closed_at,paused,game_generation,updated_at');return reply({service:'qeq-cloud-v1',settings:{revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at,gamePaused:settings.paused,controlRevision:settings.updated_at,gameGeneration:settings.game_generation}});}
  if(path==='admin/login'&&req.method==='POST'){
   const minute=Math.floor(Date.now()/60000);const ip=req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown';
   const allowed=await db('rpc/qeq_take_login_slot','POST',{p_bucket:minute+':'+await sha(ip),p_limit:10});
@@ -48,12 +48,13 @@ Deno.serve(async req=>{
   const tokenHash=await requireAdmin(req);
   if(path==='admin/logout'&&req.method==='POST'){await db('qeq_admin_sessions?token_hash=eq.'+tokenHash,'DELETE');return reply({ok:true});}
   if(path==='admin/state'&&req.method==='GET'){
-   const [[settings],latest]=await Promise.all([db('qeq_settings?select=hide_names,reveal_answers,closed_at,paused,updated_at'),db('qeq_attempts?select=updated_at&order=updated_at.desc&limit=1')]);
+   const [[settings],latest]=await Promise.all([db('qeq_settings?select=hide_names,reveal_answers,closed_at,paused,game_generation,updated_at'),db('qeq_attempts?select=updated_at&order=updated_at.desc&limit=1')]);
    const revision=settings.updated_at+'|'+(latest[0]?.updated_at||'empty');
    if(new URL(req.url).searchParams.get('since')===revision)return reply({unchanged:true,revision});
    const [attempts,photos]=await Promise.all([allRows('qeq_attempts?select=data,eligible&order=started_at,id'),allRows('qeq_photo_summary?select=*&order=id')]);
-   return reply({revision,settings:{hideNames:settings.hide_names,revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at,gamePaused:settings.paused,controlRevision:settings.updated_at},attempts:attempts.map((a:any)=>({...a.data,eligible:a.eligible})),photos});
+   return reply({revision,settings:{hideNames:settings.hide_names,revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at,gamePaused:settings.paused,controlRevision:settings.updated_at,gameGeneration:settings.game_generation},attempts:attempts.map((a:any)=>({...a.data,eligible:a.eligible})),photos});
   }
+  if(path==='admin/new-game'&&req.method==='POST'){const body=await json(req);if(!Number.isInteger(body.gameGeneration)||body.gameGeneration<1)throw fail('Joc no vàlid.');return reply(await db('rpc/qeq_new_game','POST',{p_expected_generation:body.gameGeneration}));}
   if(path==='admin/playing'&&req.method==='POST'){const body=await json(req);if(typeof body.active!=='boolean')throw fail('Estat no vàlid.');return reply(await db('rpc/qeq_set_playing','POST',{p_active:body.active}));}
   if(path==='admin/attempt'&&req.method==='POST'){const body=await json(req);if(!/^[a-f0-9-]{36}$/.test(body.id)||!['delete','exclude','include'].includes(body.action))throw fail('Acció no vàlida.');return reply(await db('rpc/qeq_manage_attempt','POST',{p_id:body.id,p_action:body.action}));}
   if(path==='admin/finish'&&req.method==='POST'){return reply(await db('rpc/qeq_finish_game','POST',{}));}
@@ -64,6 +65,7 @@ Deno.serve(async req=>{
  if(path==='device/recover'&&req.method==='POST'){
   const body=await json(req);const secret=req.headers.get('X-Attempt-Secret')||'';
   if(!/^[a-f0-9-]{36}$/.test(body.deviceId)||!/^[a-f0-9-]{36}$/.test(secret))throw fail('Dispositiu no vàlid.');
+  if(Number.isInteger(body.gameGeneration)){const [state]=await db('qeq_settings?select=game_generation');if(body.gameGeneration<state.game_generation)return reply({reset:true});}
   if(/^[a-f0-9-]{36}$/.test(body.attemptId||'')){
    const revoked=await db('qeq_revoked_attempts?id=eq.'+body.attemptId+'&select=device_id,secret_hash');
    if(revoked.length){if(revoked[0].device_id!==body.deviceId||!equal(revoked[0].secret_hash,await sha(secret)))throw fail('No autoritzat.',403);return reply({reset:true});}
@@ -90,5 +92,5 @@ Deno.serve(async req=>{
   const result=await db('rpc/qeq_save_attempt','POST',{p_data:body,p_secret_hash:await sha(secret)});return reply(result);
  }
  throw fail('Ruta no disponible.',404);
- }catch(e){const message=e instanceof Error?e.message:'Error inesperat.';const status=(e as any).status||(message.includes('No autoritzat')?403:400);return reply({error:message,reset:message==='Partida eliminada per l’organització.'},status);}
+ }catch(e){const message=e instanceof Error?e.message:'Error inesperat.';const status=(e as any).status||(message.includes('No autoritzat')?403:400);return reply({error:message,reset:['Partida eliminada per l’organització.','Partida d’un joc anterior.'].includes(message)},status);}
 });

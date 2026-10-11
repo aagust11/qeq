@@ -34,7 +34,7 @@ export async function syncAll() {
   if(info.settings.gameClosed){
    const a=savedSession();
    if(a&&read('closed-sync-'+a.id)!==info.settings.closedAt){
-    try{const device=deviceIdentity();const result=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id,attemptId:device.attemptId})});
+    try{const device=deviceIdentity();const result=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id,attemptId:device.attemptId,...(savedSession()?{gameGeneration:savedSession().gameGeneration||1}:{})})});
      write('final-'+a.id,result.attempt?{...result.attempt,secret:a.secret}:{...a,answers:[]});write('closed-sync-'+a.id,info.settings.closedAt);
     }catch{}
    }
@@ -66,6 +66,6 @@ function adoptRecovered(remote,device){
 export async function recoverSession(){
  const device=deviceIdentity();
  if(!usingCloud)return savedSession();
- try{const r=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id,attemptId:device.attemptId})});write('control-checked',read('settings',{}).controlRevision);if(r.reset){resetSession(device.attemptId);return null;}if(r.attempt)return adoptRecovered(r.attempt,device);}
+ try{const r=await api('device/recover',{method:'POST',headers:{'X-Attempt-Secret':device.secret},body:JSON.stringify({deviceId:device.id,attemptId:device.attemptId,...(savedSession()?{gameGeneration:savedSession().gameGeneration||1}:{})})});write('control-checked',read('settings',{}).controlRevision);if(r.reset){resetSession(device.attemptId);return null;}if(r.attempt)return adoptRecovered(r.attempt,device);}
  catch{}return savedSession();
 }

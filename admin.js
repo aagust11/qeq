@@ -46,3 +46,11 @@ function manageButtons(a){
 }
 async function manage(a,action,button){button.disabled=true;try{await api('admin/attempt',{method:'POST',headers:auth(),body:JSON.stringify({id:a.id,action})});revision='';await refresh();}catch(e){error(e.message);}finally{button.disabled=false;}}
 $('togglePlaying').onclick=async()=>{const button=$('togglePlaying');button.disabled=true;try{await api('admin/playing',{method:'POST',headers:auth(),body:JSON.stringify({active:!!(settings.gameClosed||settings.gamePaused)})});revision='';await refresh();}catch(e){error(e.message);}finally{button.disabled=false;}};
+
+$('newGame').onclick=async()=>{
+ if(!usingCloud){error('Aquesta opció està disponible a la versió connectada a Supabase.');return;}
+ if(!confirm('Començar un joc nou per a tothom? S’esborraran totes les partides, puntuacions i estadístiques actuals. Si les vols conservar, cancel·la i exporta-les primer. Tothom podrà tornar a jugar.'))return;
+ const button=$('newGame');button.disabled=true;
+ try{await api('admin/new-game',{method:'POST',headers:auth(),body:JSON.stringify({gameGeneration:settings.gameGeneration||1})});revision='';selected=null;revealedNames.clear();await refresh();$('settingsStatus').textContent='Joc nou iniciat. Puntuacions a zero i respostes ocultes. Tothom pot tornar a començar.';}
+ catch(e){error(e.message);}finally{button.disabled=false;}
+};
