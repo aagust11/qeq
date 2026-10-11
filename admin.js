@@ -54,3 +54,5 @@ $('newGame').onclick=async()=>{
  try{await api('admin/new-game',{method:'POST',headers:auth(),body:JSON.stringify({gameGeneration:settings.gameGeneration||1})});revision='';selected=null;revealedNames.clear();await refresh();$('settingsStatus').textContent='Joc nou iniciat. Puntuacions a zero i respostes ocultes. Tothom pot tornar a començar.';}
  catch(e){error(e.message);}finally{button.disabled=false;}
 };
+
+$('managePhotos').onclick=()=>window.open('./fotos.html','_blank');

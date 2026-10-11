@@ -1,6 +1,6 @@
 import {BLOCK_SIZE, shuffled, tally, completedCount, blocks, validAttempt, optionsFor, isPair, truthLabel} from './core.js';
 import {read, write, saveAttempt, download,deviceIdentity,savedSession,exclusive} from './storage.js';
-import {syncAll,receiptKey,usingCloud,recoverSession} from './sync.js';
+import {syncAll,receiptKey,usingCloud,recoverSession,api} from './sync.js';
 import {photoPreloader} from './preload.js';
 const $=id=>document.getElementById(id);
 const gameClosed=()=>read('settings',{}).gameClosed===true;
@@ -49,10 +49,10 @@ setupCover();setInterval(()=>{if(view!=='cover'||paused||document.hidden)return;
 function pauseLabel(){$('pause').textContent=paused?'▶ Reprendre l’animació':'Ⅱ Pausar l’animació';}pauseLabel();$('pause').onclick=()=>{paused=!paused;pauseLabel();};
 $('home').onclick=e=>{e.preventDefault();if(!busy)cover();};$('exit').onclick=()=>{if(!busy){persist();cover();}};$('resultHome').onclick=cover;
 $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{notice('Fes servir l’opció de pantalla completa del navegador.');}};
-async function loadCatalog(){try{const r=await fetch('catalog.json',{cache:'no-cache'});if(!r.ok)throw Error();const data=await r.json();if(!Array.isArray(data.cards))throw Error();catalog=data;try{write('catalog',catalog);}catch{}}catch{catalog=read('catalog',{cards:[]});}$('catalogStatus').textContent=catalog.cards.length?`${catalog.cards.length} fotos · resultats cada 7 respostes`:'Estem preparant les fotos del repte. Torna aviat!';$('play').disabled=stopped()||!catalog.cards.length;preloader.warm(catalog.cards);}
+async function loadCatalog(){try{let data;if(usingCloud)data=await api('catalog');else{const r=await fetch('catalog.json',{cache:'no-cache'});if(!r.ok)throw Error();data=await r.json();}if(!Array.isArray(data.cards))throw Error();catalog=data;try{write(usingCloud?'active-catalog':'catalog',catalog);}catch{}}catch{catalog=read(usingCloud?'active-catalog':'catalog',{cards:[]});}$('catalogStatus').textContent=catalog.cards.length?`${catalog.cards.length} fotos · resultats cada 7 respostes`:'Estem preparant les fotos del repte. Torna aviat!';$('play').disabled=stopped()||!catalog.cards.length;preloader.warm(catalog.cards);}
 $('play').onclick=async()=>{if(stopped()){notice(gameClosed()?'El joc ja està tancat.':'El joc està pausat per l’organització.');return;}const saved=await recoverSession();if(validAttempt(saved)){attempt=saved;renderGame();return;}$('joinError').textContent='';$('join').showModal();};$('closeJoin').onclick=()=>$('join').close();
 $('joinForm').onsubmit=async e=>{e.preventDefault();if(stopped()){notice(gameClosed()?'El joc ja està tancat.':'El joc està pausat per l’organització.');$('join').close();return;}return exclusive(async()=>{const saved=await recoverSession();if(validAttempt(saved)){attempt=saved;$('join').close();renderGame();return;}if(busy)return;const firstName=$('firstName').value.trim(),lastName=$('lastName').value.trim();if(!firstName||!lastName){$('joinError').textContent='Escriu el nom i els cognoms.';return;}busy=true;$('start').disabled=true;
-try{const cards=shuffled(catalog.cards);$('joinError').textContent='Preparant la primera foto…';
+try{await loadCatalog();if(!catalog.cards.length){$('joinError').textContent='No hi ha fotos activades per a aquest joc.';return;}const cards=shuffled(catalog.cards);$('joinError').textContent='Preparant la primera foto…';
 try{await preloader.ensure(cards[0]);}catch{$('joinError').textContent='No es pot carregar la primera foto. Comprova la connexió i torna-ho a provar.';return;}
 if(stopped()){$('joinError').textContent='El joc està aturat per l’organització.';return;}
 preloader.warm(cards);

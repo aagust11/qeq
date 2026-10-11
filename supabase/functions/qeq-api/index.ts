@@ -18,12 +18,26 @@ async function requireAdmin(req:Request){const token=req.headers.get('X-Admin-To
 async function passwordHash(password:string,salt:string,iterations:number){const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);return hex(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:Uint8Array.from(salt.match(/../g)!.map(x=>parseInt(x,16))),iterations},key,256));}
 function equal(a:string,b:string){if(a.length!==b.length)return false;let mismatch=0;for(let i=0;i<a.length;i++)mismatch|=a.charCodeAt(i)^b.charCodeAt(i);return mismatch===0;}
 async function allRows(path:string){const result=[];for(let offset=0;;offset+=500){const page=await db(path+'&limit=500&offset='+offset);result.push(...page);if(page.length<500)return result;}}
-async function ensureCatalog(version:string){if(!/^[a-f0-9]{16}$/.test(version))throw fail('Versió de fotos no vàlida.');const known=await db('qeq_catalogs?version=eq.'+version+'&select=version');if(known.length)return;
- // Only a fixed trusted publication can register a catalog; never client-provided identities.
- const r=await fetch(CATALOG_URL,{cache:'no-store'});if(!r.ok)throw fail('No es pot comprovar el catàleg. Ho tornarem a intentar.',503);const cat=await r.json();if(cat.version!==version||!Array.isArray(cat.cards)||!cat.cards.length)throw fail('Aquest catàleg encara no està disponible al servidor. Reintenta-ho després.',409);
- if(cat.cards.length>2000||cat.cards.some((c:any)=>!/^photos\/[a-f0-9]{24}\.(jpg|jpeg|png|webp)$/.test(c.src)||!['Èric','Aleix','Èric i Aleix','Aleix i Èric'].includes(c.person)))throw fail('Catàleg no vàlid.');
- await db('qeq_photos?on_conflict=id','POST',cat.cards.map((c:any)=>({id:c.id,src:c.src,person:c.person,kind:c.kind||'single'})),'resolution=ignore-duplicates,return=minimal');
+let officialCache:any=null,officialAt=0;
+async function officialCatalog(){
+ if(officialCache&&Date.now()-officialAt<45000)return officialCache;
+ const r=await fetch(CATALOG_URL,{cache:'no-store'});if(!r.ok)throw fail('No es pot carregar el catàleg de fotos.',503);
+ const cat=await r.json();
+ if(!/^[a-f0-9]{16}$/.test(cat.version)||!Array.isArray(cat.cards)||cat.cards.length>2000||cat.cards.some((c:any)=>!/^photos\/[a-f0-9]{24}\.(jpg|jpeg|png|webp)$/.test(c.src)||!['Èric','Aleix','Èric i Aleix','Aleix i Èric'].includes(c.person)))throw fail('Catàleg no vàlid.');
+ if(cat.cards.length)await db('qeq_photos?on_conflict=id','POST',cat.cards.map((c:any)=>({id:c.id,src:c.src,person:c.person,kind:c.kind||'single'})),'resolution=ignore-duplicates,return=minimal');
  await db('qeq_catalogs?on_conflict=version','POST',{version:cat.version,data:cat},'resolution=ignore-duplicates,return=minimal');
+ officialCache=cat;officialAt=Date.now();return cat;
+}
+async function activeCatalog(){
+ const cat=await officialCatalog();const disabled=await allRows('qeq_photos?enabled=eq.false&select=id&order=id');const ids=new Set(disabled.map((p:any)=>p.id));
+ const cards=cat.cards.filter((c:any)=>!ids.has(c.id));if(cards.length===cat.cards.length)return cat;
+ const version=(await sha(cat.version+'|'+cards.map((c:any)=>c.id).join('|'))).slice(0,16);const active={version,cards};
+ await db('qeq_catalogs?on_conflict=version','POST',{version,data:active},'resolution=ignore-duplicates,return=minimal');return active;
+}
+async function ensureCatalog(version:string){
+ if(!/^[a-f0-9]{16}$/.test(version))throw fail('Versió de fotos no vàlida.');
+ const known=await db('qeq_catalogs?version=eq.'+version+'&select=version');if(known.length)return;
+ const cat=await officialCatalog();if(cat.version!==version)throw fail('Aquest catàleg encara no està disponible al servidor. Reintenta-ho després.',409);
 }
 Deno.serve(async req=>{
  const origin=req.headers.get('Origin');const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Access-Control-Allow-Origin':ORIGIN,'Access-Control-Allow-Headers':'content-type, x-admin-token, x-attempt-secret','Access-Control-Allow-Methods':'GET,POST,PUT,OPTIONS','Vary':'Origin'};
@@ -32,6 +46,7 @@ Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers});
  const path=new URL(req.url).pathname.split('/qeq-api/')[1]||'';
  try{
+ if(path==='catalog'&&req.method==='GET')return reply(await activeCatalog());
  if(path==='info'&&req.method==='GET'){const [settings]=await db('qeq_settings?select=reveal_answers,closed_at,paused,game_generation,updated_at');return reply({service:'qeq-cloud-v1',settings:{revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at,gamePaused:settings.paused,controlRevision:settings.updated_at,gameGeneration:settings.game_generation}});}
  if(path==='admin/login'&&req.method==='POST'){
   const minute=Math.floor(Date.now()/60000);const ip=req.headers.get('x-forwarded-for')?.split(',')[0]||'unknown';
@@ -53,6 +68,14 @@ Deno.serve(async req=>{
    if(new URL(req.url).searchParams.get('since')===revision)return reply({unchanged:true,revision});
    const [attempts,photos]=await Promise.all([allRows('qeq_attempts?select=data,eligible&order=started_at,id'),allRows('qeq_photo_summary?select=*&order=id')]);
    return reply({revision,settings:{hideNames:settings.hide_names,revealAnswers:settings.reveal_answers,gameClosed:!!settings.closed_at,closedAt:settings.closed_at,gamePaused:settings.paused,controlRevision:settings.updated_at,gameGeneration:settings.game_generation},attempts:attempts.map((a:any)=>({...a.data,eligible:a.eligible})),photos});
+  }
+  if(path==='admin/photos'&&req.method==='GET'){
+   const cat=await officialCatalog();const status=await allRows('qeq_photos?select=id,enabled&order=id');const byId=new Map(status.map((p:any)=>[p.id,p.enabled]));
+   return reply({version:cat.version,photos:cat.cards.map((c:any)=>({...c,enabled:byId.get(c.id)!==false}))});
+  }
+  if(path==='admin/photos'&&req.method==='PUT'){
+   const body=await json(req);if(!/^[a-f0-9]{24}$/.test(body.id)||typeof body.enabled!=='boolean')throw fail('Foto o estat no vàlids.');
+   return reply(await db('rpc/qeq_set_photo_enabled','POST',{p_id:body.id,p_enabled:body.enabled}));
   }
   if(path==='admin/new-game'&&req.method==='POST'){const body=await json(req);if(!Number.isInteger(body.gameGeneration)||body.gameGeneration<1)throw fail('Joc no vàlid.');return reply(await db('rpc/qeq_new_game','POST',{p_expected_generation:body.gameGeneration}));}
   if(path==='admin/playing'&&req.method==='POST'){const body=await json(req);if(typeof body.active!=='boolean')throw fail('Estat no vàlid.');return reply(await db('rpc/qeq_set_playing','POST',{p_active:body.active}));}

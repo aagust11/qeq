@@ -73,3 +73,9 @@ Les fotos comencen a descarregar-se en segon pla quan arriba el catàleg, mentre
 ## Començar un joc nou
 
 El botó d’administració «Començar un joc nou» demana confirmació i buida totes les partides, puntuacions i estadístiques, reobre el joc i torna a ocultar les solucions. Abans es poden exportar les partides amb el botó existent. Els mòbils reben el reinici i poden jugar de nou sense esborrar dades del navegador; si estaven desconnectats, ho detecten en recuperar la connexió. Cada joc té una generació: les còpies antigues, fins i tot les que mai havien arribat al servidor, no poden incorporar resultats al joc nou. Reenviar la mateixa petició no torna a buidar el joc. «Activar el joc» continua reprenent el joc existent sense buidar-lo. `supabase/new-game.sql` és el canvi ja aplicat.
+
+## Selecció de fotos des d’administració
+
+«Gestionar les fotos» obre una finestra privada amb totes les fotos del catàleg publicat actual. Permet ampliar-les i activar/desactivar cada foto, amb filtres per carpeta (Èric, Aleix, Conjuntes), per prefix de les conjuntes (`ae`: Aleix i Èric; `ea`: Èric i Aleix) i per estat. La selecció es desa a Supabase i es conserva en començar un joc nou. Les fotos desactivades no s’esborren de GitHub ni de les estadístiques.
+
+Les partides noves connectades reben un catàleg amb les fotos activades. La selecció es comprova en obrir la web i de nou abans de començar; la preparació en segon pla continua funcionant. Si totes estan desactivades, no es poden començar partides. Cada selecció genera una versió immutable que el servidor registra i valida per calcular la puntuació. Les partides ja començades conserven el catàleg original per poder reprendre’s i puntuar-se correctament. Sense connexió es fa servir l’última selecció desada al mòbil; els canvis nous requereixen connexió. `supabase/photo-visibility.sql` recull la migració ja aplicada.
