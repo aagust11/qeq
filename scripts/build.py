@@ -32,6 +32,15 @@ def build():
         shutil.copyfile(ROOT/name,out/name)
     shutil.copytree(ROOT/'admin',out/'admin',dirs_exist_ok=True)
     shutil.copytree(ROOT/'assets',out/'assets',dirs_exist_ok=True)
+    # Optional QR from repository root, PNG preferred; never crop or alter its pixels.
+    qr_files = sorted((p for p in ROOT.iterdir() if p.is_file() and p.stem.casefold() == 'qr_bessons' and p.suffix.casefold() in ('.png','.jpg','.jpeg')), key=lambda p: (p.suffix.casefold() != '.png', p.name))
+    qr_name = None
+    for old in out.glob('qr_bessons.*'):
+        if old.suffix.casefold() in ('.png','.jpg','.jpeg'): old.unlink()
+    if qr_files:
+        qr_name = 'qr_bessons' + qr_files[0].suffix.lower()
+        shutil.copyfile(qr_files[0], out/qr_name)
+    (out/'qr-config.json').write_text(json.dumps({'src':qr_name}),encoding='utf-8')
     (out/'.nojekyll').touch()
     print(f'Catàleg preparat: {len(cards)} fotos. Versió {revision}.')
     return manifest

@@ -103,3 +103,14 @@ window.addEventListener('storage',e=>{if(e.key==='qeq-v2-device'){attempt=savedS
 window.addEventListener('online',()=>syncAll());window.addEventListener('storage',e=>{if(e.key==='qeq-v2-settings'&&view==='results')renderResults();if(e.key?.startsWith('qeq-v2-attempt-')&&!busy){const saved=savedSession();if(validAttempt(saved)){attempt=saved;if(view!=='cover')renderGame();else refreshResume();}}});document.addEventListener('qeq-recovered',()=>{if(!busy){attempt=savedSession();renderGame();}});document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncAll();});setInterval(syncAll,10000);
 if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{});}
 refreshResume();loadCatalog();recoverSession().then(saved=>{if(validAttempt(saved)){attempt=saved;renderGame();}syncAll();}).catch(()=>notice('No es pot desar al navegador. Activa l’emmagatzematge per jugar.'));
+
+let qrLoaded=false;
+$('showQr').onclick=async()=>{
+ if(busy)return;
+ const visible=$('qrPanel').hidden;cover();$('qrPanel').hidden=!visible;$('cover').classList.toggle('qr-mode',visible);$('showQr').setAttribute('aria-expanded',String(visible));$('showQr').textContent=visible?'Amagar el QR':'Mostrar el QR';
+ if(!visible||qrLoaded)return;
+ const img=$('coverQr'),status=$('qrStatus');status.hidden=false;status.textContent='Carregant el QR…';
+ try{const r=await fetch('qr-config.json',{cache:'no-cache'});if(!r.ok)throw Error();const config=await r.json();if(!/^qr_bessons\.(png|jpe?g)$/i.test(config.src||''))throw Error();
+  img.onload=()=>{qrLoaded=true;img.hidden=false;status.hidden=true;};img.onerror=()=>{img.hidden=true;status.hidden=false;status.textContent='No s’ha pogut carregar el QR. Torna-ho a provar.';};img.src=config.src;
+ }catch{status.textContent='El QR encara no està disponible. Cal publicar qr_bessons.png o qr_bessons.jpg a l’arrel.';}
+};
